@@ -147,6 +147,10 @@
     <ClInclude Include="Array.h" />
     <ClInclude Include="Letter.h" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="1.bin" />
+    <None Include="Сжатие.bin" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

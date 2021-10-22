@@ -9,6 +9,12 @@ Letter::Letter(ulInt frequency) : Letter() {
 	this->frequency = frequency;
 }
 
+Letter::Letter(Letter* other) {
+	this->frequency = other->getFrequency();
+	this->sizeOfCode = other->getSizeOfCode();
+	this->code = other->getCode();
+}
+
 ulInt Letter::getFrequency() {
 	return frequency;
 }

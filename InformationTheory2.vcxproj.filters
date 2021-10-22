@@ -33,4 +33,12 @@
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
   </ItemGroup>
+  <ItemGroup>
+    <None Include="Сжатие.bin">
+      <Filter>Файлы ресурсов</Filter>
+    </None>
+    <None Include="1.bin">
+      <Filter>Файлы ресурсов</Filter>
+    </None>
+  </ItemGroup>
 </Project>

@@ -8,6 +8,7 @@ class Letter
 public: 
 	Letter();
 	Letter(ulInt frequency);
+	Letter(Letter* other);
 
 	ulInt getFrequency();
 	void setFrequency(ulInt frequency);
