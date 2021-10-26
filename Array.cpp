@@ -141,17 +141,16 @@ Array& Array::operator = (Array& other) {
 	this->sum = other.getSum();
 	this->sizeArr = other.getSizeArr();
 	this->size = other.getSize();
-	if (this->array) delete[]this->array;
+	if (this->array) {
+		for (ulInt i = 0; i < this->sizeArr; i++) delete array[i];
+		delete[]array;
+	}
 	this->array = new Letter* [sizeArr];
 	for (ulInt i = 0; i < sizeArr; i++) this->array[i] = new Letter(other.getArray()[i]);
 	return *this;
 }
 
 Array::~Array() {
-	if (this->array)
-	{
-		for (ulInt i = 0; i < this->sizeArr; i++)
-			array[i]->~Letter();
-		delete[](this->array);
-	}
+	for (int i = 0; i < sizeArr; i++) delete this->getArray()[i];
+	delete[]this->getArray();
 }

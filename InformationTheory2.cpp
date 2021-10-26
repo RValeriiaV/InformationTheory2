@@ -5,12 +5,10 @@
 #include "Array.h"
 using namespace std;
 
-//	ПОСЛЕ КОНСТРУКТОРА КОПИРОВАНИЯ LETTER ВЫЗЫВАЕТСЯ ДЕСТРУКТОР
-
 typedef unsigned long long int ulInt;
 
 ulInt* Frequency(ifstream& fin, int& extra, ulInt& sizeOfAlphabet, char& letterSize);
-void Fano(Array* start);
+void Fano(Array*& start);
 void Splitting(Array* start, Array*& arr1, Array*& arr2);
 void Sort(ulInt* array, ulInt size); //по убыванию
 
@@ -45,6 +43,7 @@ int main() {
 			ulInt sizeOfAlphabet;
 			char letterSize;
 			ulInt* frequency = Frequency(fin, extra, sizeOfAlphabet, letterSize);
+			if (!frequency) break;
 			ulInt* letters = new ulInt[sizeOfAlphabet];
 			for (ulInt i = 0; i < sizeOfAlphabet; i++)
 				letters[i] = frequency[i]; //сохраняем неотсортированный массив, чтобы потом можно было сопоставить буквы и коды
@@ -58,35 +57,42 @@ int main() {
 				i++;
 			}
 
-			for (ulInt i = shift, j = 0; i < sizeOfAlphabet; i++, j++) {
-				frequency[j] = frequency[i];
-				frequency[i] = 0;
-			}
+			for (ulInt i = shift, j = 0; i < sizeOfAlphabet; i++, j++) frequency[j] = frequency[i]; 
 			
-			//из массива ulInt создаем массив Letter
-			Letter** ForFano = new Letter*[sizeOfAlphabet];
-			for (ulInt i = 0; i < sizeOfAlphabet; i++) ForFano[i] = new Letter(frequency[i]);
 
-			Array* arrayForFano = new Array(ForFano, sizeOfAlphabet, sizeOfAlphabet - shift);
+			//из массива ulInt создаем массив Letter
+			Letter** ForFano = new Letter*[sizeOfAlphabet - shift];
+			for (ulInt i = 0; i < sizeOfAlphabet - shift; i++) ForFano[i] = new Letter(frequency[i]);
+			delete[]frequency;
+
+			Array* arrayForFano = new Array(ForFano, sizeOfAlphabet - shift, sizeOfAlphabet - shift);
 
 			//так как при создании Array значения Letter копируются, массив ForFano можно удалять
+			for (ulInt i = 0; i < sizeOfAlphabet - shift; i++) delete ForFano[i];
 			delete[]ForFano;
 
 			Fano(arrayForFano);
 
-			Letter* nul = new Letter();
+			Array* arrayForRecord = new Array(sizeOfAlphabet);
+			arrayForRecord->setSize(arrayForFano->getSize());
+			for (ulInt i = 0; i < arrayForFano->getSize(); i++)
+				(*arrayForRecord->getArray()[i]) = (*arrayForFano->getArray()[i]);
+			delete arrayForFano;
+
+			Letter* buf;
 			for (ulInt i = 0; i < sizeOfAlphabet; i++) {
-				Letter* buf = arrayForFano->getArray()[i];
+				buf = arrayForRecord->getArray()[i];
 				if (letters[i] == 0) {
-					arrayForFano->getArray()[i] = nul;
-					arrayForFano->getArray()[arrayForFano->getSize()] = buf;
-					arrayForFano->setSize(arrayForFano->getSize() + 1);
+					arrayForRecord->getArray()[i] = arrayForRecord->getArray()[arrayForRecord->getSize()];
+					arrayForRecord->getArray()[arrayForRecord->getSize()] = buf;
+					arrayForRecord->setSize(arrayForRecord->getSize() + 1);
 				}
 				else {
 					ulInt j = i;
-					while (letters[i] != arrayForFano->getArray()[j]->getFrequency()) j++; //ищем элемент с той же встречаемостью, что и буква
-					arrayForFano->getArray()[i] = arrayForFano->getArray()[j];
-					arrayForFano->getArray()[j] = buf;
+					while (letters[i] != arrayForRecord->getArray()[j]->getFrequency()) 
+						j++; //ищем элемент с той же встречаемостью, что и буква
+					arrayForRecord->getArray()[i] = arrayForRecord->getArray()[j];
+					arrayForRecord->getArray()[j] = buf;
 				}
 			}
 			sizeOfAlphabet -= shift; 
@@ -98,18 +104,19 @@ int main() {
 
 			int excess; //выравнивание на байт при записи
 			ulInt sum = 0; //сколько битов будет в новом тексте
-			for (ulInt i = 0; i < arrayForFano->getSize(); i++)
-				sum += (arrayForFano->getArray()[i]->getFrequency() * arrayForFano->getArray()[i]->getSizeOfCode());
+			for (ulInt i = 0; i < arrayForRecord->getSize(); i++)
+				sum += (arrayForRecord->getArray()[i]->getFrequency() * arrayForRecord->getArray()[i]->getSizeOfCode());
 			excess = (8 - sum % 8) % 8;
 
 			fout.write((char*)&excess, sizeof(char)); //записано лишних бит 
 
 			
 			//нужно просмотреть весь массив, поэтому с нулевыми буквами
-			Heading(arrayForFano, sizeOfAlphabet + shift, fout, letterSize);
+			Heading(arrayForRecord, sizeOfAlphabet + shift, fout, letterSize);
 
-			MainPart(fin, fout, arrayForFano, letterSize);
+			MainPart(fin, fout, arrayForRecord, letterSize);
 
+			delete arrayForRecord;
 			fout.close();
 			
 			break;
@@ -156,7 +163,7 @@ int main() {
 
 //возвращает массив встречаемости буквы (индекс - буква, значение - количество встреч)
 ulInt* Frequency(ifstream& fin, int& extra, ulInt& sizeOfAlphabet, char& letterSize) {
-	unsigned int sizeOfLetter; //длина буквы в битах
+	int sizeOfLetter; //длина буквы в битах
 
 	//определение длины буквы
 	while (true) {
@@ -164,12 +171,12 @@ ulInt* Frequency(ifstream& fin, int& extra, ulInt& sizeOfAlphabet, char& letterS
 		cin >> sizeOfLetter;
 		if (sizeOfLetter < 1) {
 			cout << "Действие невозможно. Операция отменена" << endl << endl;
-			break;
+			return NULL;
 		}
 		else
 			if (sizeOfLetter == 1) {
 				cout << "Действие бесполезно. Операция отменена" << endl << endl;
-				break;
+				return NULL;
 			}
 			else {
 				cout << "Результат будет сохранен в файле Сжатие.bin" << endl;
@@ -248,31 +255,35 @@ bool Adding(Array* arr, int digit) {
 }
 
 //принимает массив букв и возвращает его с дописанными кодами
-void Fano(Array* start) {
-	Array* arr1 = new Array(start->getSizeArr());
-	Array* arr2 = new Array(start->getSizeArr());
+void Fano(Array*& start) {
+	Array* arr1 = new Array(start->getSize());
+	Array* arr2 = new Array(start->getSize());
 	arr1->setSize(0);
 	arr2->setSize(0);
 	Splitting(start, arr1, arr2);
 	
 	if (!Adding(arr1, 0)) {
-		arr1->setSizeArr(arr1->getSize());
 		arr1->Sort();
 		Fano(arr1);
 	}
 	if (!Adding(arr2, 1)) {
-		arr2->setSizeArr(arr2->getSize());
 		arr2->Sort();
 		Fano(arr2);
 	}
 
+	delete start;
+
+	start = new Array(arr1->getSize() + arr2->getSize());
 	ulInt i = 0;
 	for (ulInt j = 0; j < arr1->getSize(); j++, i++)
-		start->getArray()[i] = arr1->getArray()[j];
+		(*start->getArray()[i]) = (*arr1->getArray()[j]);
 	for (ulInt j = 0; j < arr2->getSize(); j++, i++)
-		start->getArray()[i] = arr2->getArray()[j];
-	start->setSize(i);
+		(*start->getArray()[i]) = (*arr2->getArray()[j]);
 	start->setSum(arr1->getSum() + arr2->getSum());
+	start->Sort();
+
+	delete arr1;
+	delete arr2;
 		
 	/*for (int i = 0; i < arr1->getSize(); i++) cout << arr1->getArray()[i]->getFrequency() << "  ";
 	for (int i = 0; i < arr2->getSize(); i++) cout << arr2->getArray()[i]->getFrequency() << "  ";*/
@@ -282,45 +293,31 @@ void Fano(Array* start) {
 void Splitting(Array* start, Array*& arr1, Array*& arr2) {
 	if (start->getSum() + arr1->getSum() <= arr2->getSum()) {
 		for (ulInt i = 0, j = arr1->getSize(); i < start->getSize(); i++, j++)
-			arr1->getArray()[j] = start->getArray()[i];
+			(*arr1->getArray()[j]) = (*start->getArray()[i]);
 		arr1->setSum(arr1->getSum() + start->getSum());
 		arr1->setSize(arr1->getSize() + start->getSize());
-		/*start->setSize(0);
-		start->setSum(0);*/
 		return;
 	}
 	else if (start->getSum() + arr2->getSum() <= arr1->getSum()) {
 		for (ulInt i = 0, j = arr2->getSize(); i < start->getSize(); i++, j++)
-			arr2->getArray()[j] = start->getArray()[i];
+			(*arr2->getArray()[j]) = (*start->getArray()[i]);
 		arr2->setSum(arr2->getSum() + start->getSum());
 		arr2->setSize(arr2->getSize() + start->getSize());
-		/*start->setSize(0);
-		start->setSum(0);*/
 		return;
 	}
 
 
-	Array* firstArr1 = new Array(start->getSizeArr());
-	Array* firstArr2 = new Array(start->getSizeArr());
-	Array* secondArr1 = new Array(start->getSizeArr());
-	Array* secondArr2 = new Array(start->getSizeArr());
+	Array* firstArr1 = new Array(arr1->getSizeArr());
+	Array* firstArr2 = new Array(arr2->getSizeArr());
 
 	(*firstArr1) = (*arr1); 
 	(*firstArr2) = (*arr2); 
-	(*secondArr1) = (*arr1); 
-	(*secondArr2) = (*arr2);
+	
 
 	//добавляем самый большой элемент исходного массива в первый массив первой ветви
-	firstArr1->getArray()[firstArr1->getSize()] = start->getArray()[start->getSize() - 1];
+	(*firstArr1->getArray()[firstArr1->getSize()]) = (*start->getArray()[start->getSize() - 1]);
 	firstArr1->setSize(firstArr1->getSize() + 1);
 	firstArr1->setSum(firstArr1->getSum() + start->getArray()[start->getSize() - 1]->getFrequency());
-
-	if (arr1->getSum() != arr2->getSum()) { //если суммы массивов равны, нет смысла ставить во второй
-		//во второй массив второй ветви
-		secondArr2->getArray()[secondArr2->getSize()] = start->getArray()[start->getSize() - 1];
-		secondArr2->setSize(secondArr2->getSize() + 1);
-		secondArr2->setSum(secondArr2->getSum() + start->getArray()[start->getSize() - 1]->getFrequency());
-	}
 
 	//скрываем из рассмотрения в основном массиве этот элемент
 	start->setSum(start->getSum() - start->getArray()[start->getSize() - 1]->getFrequency());
@@ -334,55 +331,52 @@ void Splitting(Array* start, Array*& arr1, Array*& arr2) {
 	long long int delta1 = firstArr1->getSum() - firstArr2->getSum();
 
 	if (abs(delta1) < 2) { //лучше уже не будет, дельта 0 или 1
-		arr1->~Array();
-		arr2->~Array();
+		delete arr1;
+		delete arr2;
 		arr1 = firstArr1;
 		arr2 = firstArr2;
-		secondArr1->~Array();
-		secondArr2->~Array();
 		return;
 	}
 
-
-
-	if (arr1->getSum() != arr2->getSum()) {
+	if (arr1->getSum() != arr2->getSum()) { //если суммы массивов равны, нет смысла ставить
+		//во второй массив второй ветви
+		Array* secondArr1 = new Array(arr1->getSizeArr());
+		Array* secondArr2 = new Array(arr2->getSizeArr());
+		(*secondArr1) = (*arr1);
+		(*secondArr2) = (*arr2);
 		start->setSize(sizeOfStart);
 		start->setSum(sumOfstart);
+		(*secondArr2->getArray()[secondArr2->getSize()]) = (*start->getArray()[start->getSize()]);
+		secondArr2->setSize(secondArr2->getSize() + 1);
+		secondArr2->setSum(secondArr2->getSum() + start->getArray()[start->getSize()]->getFrequency());
 
 		Splitting(start, secondArr1, secondArr2);
-	}
 
-	
-
-	if (arr1->getSum() != arr2->getSum()) {
 		long long int delta2 = secondArr1->getSum() - secondArr2->getSum();
 		if (abs(delta1) < abs(delta2)) {
-			arr1->~Array();
-			arr2->~Array();
+			delete arr1;
+			delete arr2;
 			arr1 = firstArr1;
 			arr2 = firstArr2;
-			secondArr1->~Array();
-			secondArr2->~Array();
+			delete secondArr1;
+			delete secondArr2;
 		}
 		else {
-			arr1->~Array();
-			arr2->~Array();
+			delete arr1;
+			delete arr2;
 			arr1 = secondArr1;
 			arr2 = secondArr2;
-			firstArr1->~Array();
-			firstArr2->~Array();
+			delete firstArr1;
+			delete firstArr2;
 
 		}
 	}
 	else {
-		arr1->~Array();
-		arr2->~Array();
+		delete arr1;
+		delete arr2;
 		arr1 = firstArr1;
 		arr2 = firstArr2;
-		secondArr1->~Array();
-		secondArr2->~Array();
 	}
-	
 	return;
 }
 

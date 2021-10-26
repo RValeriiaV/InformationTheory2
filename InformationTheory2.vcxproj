@@ -142,10 +142,12 @@
     <ClCompile Include="Array.cpp" />
     <ClCompile Include="InformationTheory2.cpp" />
     <ClCompile Include="Letter.cpp" />
+    <ClCompile Include="Node.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Array.h" />
     <ClInclude Include="Letter.h" />
+    <ClInclude Include="Node.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="1.bin" />
