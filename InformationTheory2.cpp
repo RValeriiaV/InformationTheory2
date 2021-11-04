@@ -3,6 +3,7 @@
 #include <cmath>
 #include "Letter.h"
 #include "Array.h"
+#include "Node.h"
 using namespace std;
 
 typedef unsigned long long int ulInt;
@@ -15,7 +16,8 @@ void Sort(ulInt* array, ulInt size); //по убыванию
 void Heading(Array* arr, ulInt sizeOfAlphabet, ofstream& fout, char sizeOfLetter);
 void MainPart(ifstream& fin, ofstream& fout, Array* arr, char letterSize);
 
-void ReadHeading(Array* arr, ulInt sizeOfAlphabet, char letterSize, ifstream& fin);
+void ReadHeading(Array* arr, ulInt sizeOfAlphabet, char letterSize, ifstream& fin, ulInt& sizeToRead);
+void ReadMain(Array* arr, ifstream& fin, char extraReading, char extraRecording, ulInt sizeToRead, char letterSize);
 
 int main() {
 	setlocale(LC_ALL, "Russian");
@@ -96,7 +98,7 @@ int main() {
 				}
 			}
 			sizeOfAlphabet -= shift; 
-			ofstream fout("Сжатие.bin", ios::binary);
+			ofstream fout("result.bin", ios::binary);
 			//мощность алфавита без учета нулевых букв
 			fout.write((char*)&sizeOfAlphabet, sizeof(ulInt));
 			fout.write(&letterSize, sizeof(char)); //длина исходной буквы
@@ -133,6 +135,10 @@ int main() {
 				break;
 			}
 
+			fin.seekg(0, ios::end); //перемещаемся в конец файла
+			ulInt sizeToRead = fin.tellg(); //измеряем расстояние от начала файла до курсора (в байтах)
+			fin.seekg(0, ios::beg); //возвращаемся к началу
+
 			ulInt sizeOfAlphabet;
 			fin.read((char*)&sizeOfAlphabet, sizeof(ulInt));
 			char letterSize;
@@ -142,6 +148,8 @@ int main() {
 			char extraRecording; 
 			fin.read(&extraRecording, sizeof(char));
 
+			sizeToRead -= (sizeof(ulInt) + 3 * sizeof(char));
+
 			ulInt sizeArr = 1; //сколько букв могло бы быть в исходном алфавите
 			for (int i = 0; i < letterSize; i++) sizeArr *= 2; 
 			Array* arr = new Array(sizeArr);
@@ -149,7 +157,9 @@ int main() {
 			for (ulInt i = 0; i < sizeArr; i++)
 				arr->getArray()[i] = new Letter();
 
-			ReadHeading(arr, sizeOfAlphabet, letterSize, fin);
+			ReadHeading(arr, sizeOfAlphabet, letterSize, fin, sizeToRead);
+			ReadMain(arr, fin, extraReading, extraRecording, sizeToRead, letterSize);
+			delete arr;
 			break;
 		}
 		case '0': return 0;
@@ -179,7 +189,7 @@ ulInt* Frequency(ifstream& fin, int& extra, ulInt& sizeOfAlphabet, char& letterS
 				return NULL;
 			}
 			else {
-				cout << "Результат будет сохранен в файле Сжатие.bin" << endl;
+				cout << "Результат будет сохранен в файле result.bin" << endl;
 				break;
 			}
 	}
@@ -291,11 +301,13 @@ void Fano(Array*& start) {
 }
 
 void Splitting(Array* start, Array*& arr1, Array*& arr2) {
+	cout << start->getSize() << endl;
 	if (start->getSum() + arr1->getSum() <= arr2->getSum()) {
 		for (ulInt i = 0, j = arr1->getSize(); i < start->getSize(); i++, j++)
 			(*arr1->getArray()[j]) = (*start->getArray()[i]);
 		arr1->setSum(arr1->getSum() + start->getSum());
 		arr1->setSize(arr1->getSize() + start->getSize());
+		//if (arr1->getSize() != 31) cout << "arr1 " << arr1->getSize() << " arr2 " << arr2->getSize() << endl;
 		return;
 	}
 	else if (start->getSum() + arr2->getSum() <= arr1->getSum()) {
@@ -303,6 +315,13 @@ void Splitting(Array* start, Array*& arr1, Array*& arr2) {
 			(*arr2->getArray()[j]) = (*start->getArray()[i]);
 		arr2->setSum(arr2->getSum() + start->getSum());
 		arr2->setSize(arr2->getSize() + start->getSize());
+		//if (arr1->getSize() != 31) cout << "arr1 " << arr1->getSize() << " arr2 " << arr2->getSize() << endl;
+		return;
+	}
+	if (start->getSize() == 1) {
+		(*arr1->getArray()[arr1->getSize()]) = (*start->getArray()[0]);
+		arr1->setSum(arr1->getSum() + start->getSum());
+		arr1->setSize(arr1->getSize() + 1);
 		return;
 	}
 
@@ -428,26 +447,25 @@ void Heading(Array* arr, ulInt sizeOfAlphabet, ofstream& fout, char sizeOfLetter
 	}
 }
 
-void remainderForRecord(ulInt& letter, Array* arr, ulInt& remainder, char& sizeOfRemainder, ofstream& fout) {
-	//добавляем к цепочки для записи новый код собранной буквы
-	remainder = (remainder << arr->getArray()[letter]->getSizeOfCode()) + arr->getArray()[letter]->getCode();
-	sizeOfRemainder += arr->getArray()[letter]->getSizeOfCode();
+void remainderForRecord(ulInt& remainder, char& sizeOfRemainder, ofstream& fout) {
 
-	ulInt buf_divisor = 1; //чтобы отрезать старшие разряды от remainder
-	for (int i = 0; i < sizeOfRemainder - 1; i++) buf_divisor *= 2;
+	
 
 	//пока цепочка для записи не меньше байта делаем
 	while (sizeOfRemainder > 7) {
 
+		ulInt buf_divisor = 1; //чтобы отрезать старшие разряды от remainder
+		for (int i = 0; i < sizeOfRemainder - 1; i++) buf_divisor *= 2;
+
 		char forRecording = 0; //байт, который будет записан
 		for (int i = 0; i < 8; i++) {
 			char bit = remainder / buf_divisor; //старший разряд цепочки для записи
-			remainder %= buf_divisor; //всё, кроме старшего разряда
+			remainder = remainder % buf_divisor; //всё, кроме старшего разряда
 
 			forRecording = forRecording << 1; //к байту для записи дописываем отрезанный разряд
 			forRecording += bit;
 
-			buf_divisor /= 2;
+			buf_divisor = buf_divisor / 2;
 		}
 		fout.write(&forRecording, sizeof(char)); //записываем собранный байт
 		sizeOfRemainder -= 8;
@@ -477,7 +495,10 @@ void MainPart(ifstream& fin, ofstream& fout, Array* arr, char letterSize) {
 
 		for (int j = 0; j < 8; j++) { //разбираем побитово
 			if (_inLetter == letterSize) { //буква готова
-				remainderForRecord(letter, arr, remainder, sizeOfRemainder, fout);
+				//добавляем к цепочки для записи новый код собранной буквы
+				remainder = (remainder << arr->getArray()[letter]->getSizeOfCode()) + arr->getArray()[letter]->getCode();
+				sizeOfRemainder += arr->getArray()[letter]->getSizeOfCode();
+				remainderForRecord(remainder, sizeOfRemainder, fout);
 				letter = 0; //обнуляем букву
 				_inLetter = 0; //обнуляем позицию в букве
 			}
@@ -496,7 +517,9 @@ void MainPart(ifstream& fin, ofstream& fout, Array* arr, char letterSize) {
 			letter = letter << 1; //дописываем нули справа
 			_inLetter++;
 		}
-		remainderForRecord(letter, arr, remainder, sizeOfRemainder, fout);
+		remainder = (remainder << arr->getArray()[letter]->getSizeOfCode()) + arr->getArray()[letter]->getCode();
+		sizeOfRemainder += arr->getArray()[letter]->getSizeOfCode();
+		remainderForRecord(remainder, sizeOfRemainder, fout);
 	}
 
 	//если цепочка для записи не пуста
@@ -508,21 +531,102 @@ void MainPart(ifstream& fin, ofstream& fout, Array* arr, char letterSize) {
 	fout.write((char*)&remainder, sizeof(char));
 }
 
-void ReadHeading(Array* arr, ulInt sizeOfAlphabet, char letterSize, ifstream& fin) {
+void ReadHeading(Array* arr, ulInt sizeOfAlphabet, char letterSize, ifstream& fin, ulInt& sizeToRead) {
 	for (ulInt i = 0; i < sizeOfAlphabet; i++) {
 		ulInt letter = 0; 
 		char length = ceil(letterSize / 8.0);
 		fin.read((char*)&letter, length * sizeof(char));
+		sizeToRead -= (length * sizeof(char));
 
 		char sizeOfCode; 
 		fin.read(&sizeOfCode, sizeof(char));
+		sizeToRead -= sizeof(char);
 
 		ulInt code = 0; 
 		length = ceil(sizeOfCode / 8.0);
 		fin.read((char*)&code, length * sizeof(char));
+		sizeToRead -= (length * sizeof(char));
 
 		arr->getArray()[letter]->setCode(code);
 		arr->getArray()[letter]->setSizeOfCode(sizeOfCode);
 	}
+}
+
+void ReadMain(Array* arr, ifstream& fin, char extraReading, char extraRecording, ulInt sizeToRead, char letterSize) {
+	cout << "Введите название файла, в который нужно сохранить раскодированный текст. Пожалуйста, введите его вместе с расширением" << endl;
+	string filename;
+	cin >> filename; 
+	ofstream fout(filename, ios::binary);
+
+	Tree* tree = new Tree(arr);
+	unsigned char buf = 0; //читаемый байт
+	
+	ulInt remainder = 0; //остаток записываемого кода (цепочка для записи)
+	char sizeOfRemainder = 0; //битовая длина остатка
+
+	bool codeIsStart = false; //начали собирать код
+	Node* cur = nullptr; 
+	for (ulInt i = 0; i < sizeToRead - 1; i++) { //читаем все байты, кроме последнего, так как там могут быть дописаны нули
+		fin.read((char*)&buf, sizeof(char));
+		int divisor = 128;
+		for (int i = 0; i < 8; i++) { //разбираем по битам
+			char bit = buf / divisor; 
+			buf = buf % divisor; 
+			divisor /= 2; 
+			if (codeIsStart) {
+				if (bit == 0)
+					cur = cur->getBranch0();
+				else
+					cur = cur->getBranch1();
+			}
+			else {
+				if (bit == 0)
+					cur = tree->getBranch0();
+				else
+					cur = tree->getBranch1();
+				codeIsStart = true;
+			}
+
+			if (cur->getBranch0() == nullptr && cur->getBranch1() == nullptr) { //этот код является листом дерева, то есть буквой
+				codeIsStart = false;
+				for (int j = 0; j < letterSize; j++) remainder *= 2; 
+				remainder += cur->getLetter();
+				sizeOfRemainder += letterSize;
+			}
+			remainderForRecord(remainder, sizeOfRemainder, fout);
+		}
+		remainderForRecord(remainder, sizeOfRemainder, fout);
+	}
+	fin.read((char*)&buf, sizeof(char));
+	int divisor = 128; 
+	for (int i = 0; i < 8 - extraRecording; i++) { //разбираем по битам
+		char bit = buf / divisor;
+		buf = buf % divisor;
+		divisor /= 2;
+		if (codeIsStart) {
+			if (bit == 0)
+				cur = cur->getBranch0();
+			else
+				cur = cur->getBranch1();
+		}
+		else {
+			if (bit == 0)
+				cur = tree->getBranch0();
+			else
+				cur = tree->getBranch1();
+			codeIsStart = true;
+		}
+
+		if (cur->getBranch0() == nullptr && cur->getBranch1() == nullptr) { //этот код является листом дерева, то есть буквой
+			codeIsStart = false;
+			for (int j = 0; j < letterSize; j++) remainder *= 2;
+			remainder += cur->getLetter();
+			sizeOfRemainder += letterSize;
+		}
+	}
+	sizeOfRemainder -= extraReading; 
+	for (int i = 0; i < extraReading; i++) remainder /= 2;
+	remainderForRecord(remainder, sizeOfRemainder, fout);
+	delete tree;
 }
 
