@@ -10,7 +10,7 @@ typedef unsigned long long int ulInt;
 
 ulInt* Frequency(ifstream& fin, int& extra, ulInt& sizeOfAlphabet, char& letterSize);
 void Fano(Array*& start);
-void Splitting(Array* start, Array*& arr1, Array*& arr2);
+void Splitting(Array* start, Array*& arr1, Array*& arr2, ofstream& fout);
 void Sort(ulInt* array, ulInt size); //по убыванию
 
 void Heading(Array* arr, ulInt sizeOfAlphabet, ofstream& fout, char sizeOfLetter);
@@ -270,7 +270,8 @@ void Fano(Array*& start) {
 	Array* arr2 = new Array(start->getSize());
 	arr1->setSize(0);
 	arr2->setSize(0);
-	Splitting(start, arr1, arr2);
+	ofstream fout("log.txt");
+	Splitting(start, arr1, arr2, fout);
 	
 	if (!Adding(arr1, 0)) {
 		arr1->Sort();
@@ -300,14 +301,15 @@ void Fano(Array*& start) {
 	return;
 }
 
-void Splitting(Array* start, Array*& arr1, Array*& arr2) {
-	cout << start->getSize() << endl;
+void Splitting(Array* start, Array*& arr1, Array*& arr2, ofstream &fout) {
+	//cout << start->getSize() << endl;
 	if (start->getSum() + arr1->getSum() <= arr2->getSum()) {
 		for (ulInt i = 0, j = arr1->getSize(); i < start->getSize(); i++, j++)
 			(*arr1->getArray()[j]) = (*start->getArray()[i]);
 		arr1->setSum(arr1->getSum() + start->getSum());
 		arr1->setSize(arr1->getSize() + start->getSize());
 		//if (arr1->getSize() != 31) cout << "arr1 " << arr1->getSize() << " arr2 " << arr2->getSize() << endl;
+		fout << "back" << endl;
 		return;
 	}
 	else if (start->getSum() + arr2->getSum() <= arr1->getSum()) {
@@ -316,12 +318,14 @@ void Splitting(Array* start, Array*& arr1, Array*& arr2) {
 		arr2->setSum(arr2->getSum() + start->getSum());
 		arr2->setSize(arr2->getSize() + start->getSize());
 		//if (arr1->getSize() != 31) cout << "arr1 " << arr1->getSize() << " arr2 " << arr2->getSize() << endl;
+		fout << "back" << endl;
 		return;
 	}
 	if (start->getSize() == 1) {
 		(*arr1->getArray()[arr1->getSize()]) = (*start->getArray()[0]);
 		arr1->setSum(arr1->getSum() + start->getSum());
 		arr1->setSize(arr1->getSize() + 1);
+		fout << "back" << endl;
 		return;
 	}
 
@@ -346,7 +350,8 @@ void Splitting(Array* start, Array*& arr1, Array*& arr2) {
 	ulInt sizeOfStart = start->getSize();
 	ulInt sumOfstart = start->getSum();
 
-	Splitting(start, firstArr1, firstArr2);
+	fout << 1 << endl;
+	Splitting(start, firstArr1, firstArr2, fout);
 	long long int delta1 = firstArr1->getSum() - firstArr2->getSum();
 
 	if (abs(delta1) < 2) { //лучше уже не будет, дельта 0 или 1
@@ -369,7 +374,8 @@ void Splitting(Array* start, Array*& arr1, Array*& arr2) {
 		secondArr2->setSize(secondArr2->getSize() + 1);
 		secondArr2->setSum(secondArr2->getSum() + start->getArray()[start->getSize()]->getFrequency());
 
-		Splitting(start, secondArr1, secondArr2);
+		fout << 2 << endl;
+		Splitting(start, secondArr1, secondArr2, fout);
 
 		long long int delta2 = secondArr1->getSum() - secondArr2->getSum();
 		if (abs(delta1) < abs(delta2)) {
@@ -396,6 +402,7 @@ void Splitting(Array* start, Array*& arr1, Array*& arr2) {
 		arr1 = firstArr1;
 		arr2 = firstArr2;
 	}
+	fout << "back" << endl;
 	return;
 }
 
